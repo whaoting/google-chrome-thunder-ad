@@ -53,26 +53,51 @@ const updateSettings = async (settings: UserSettings): Promise<void> => {
 
 // 獲取當前廣告狀態
 const getAdStatus = async (): Promise<AdStatus | null> => {
-  return new Promise((resolve, reject) => {
-    // 查詢當前活動標籤
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (!tabs || tabs.length === 0) {
-        resolve(null);
-        return;
-      }
-      
-      // 發送消息到內容腳本
-      chrome.tabs.sendMessage(tabs[0].id!, { type: MessageType.GET_AD_STATUS }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.error('獲取廣告狀態時出錯:', chrome.runtime.lastError);
+  return new Promise((resolve) => {
+    try {
+      // 查詢當前活動標籤
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (!tabs || tabs.length === 0) {
+          console.log('未找到活動標籤');
           resolve(null);
-        } else if (response && response.success) {
-          resolve(response.status);
-        } else {
+          return;
+        }
+        
+        // 檢查是否為 YouTube 頁面
+        const url = tabs[0].url || '';
+        if (!url.includes('youtube.com')) {
+          console.log('不是 YouTube 頁面');
+          resolve(null);
+          return;
+        }
+        
+        // 發送消息到內容腳本
+        try {
+          chrome.tabs.sendMessage(tabs[0].id!, { type: MessageType.GET_AD_STATUS }, (response) => {
+            // 處理 chrome.runtime.lastError，避免未捕獲的錯誤
+            if (chrome.runtime.lastError) {
+              const errorMessage = chrome.runtime.lastError.message || '未知錯誤';
+              console.error('獲取廣告狀態時出錯:', errorMessage);
+              resolve(null);
+              return;
+            }
+            
+            if (response && response.success) {
+              resolve(response.status);
+            } else {
+              console.log('回應無效或不成功');
+              resolve(null);
+            }
+          });
+        } catch (error) {
+          console.error('發送消息時出錯:', error instanceof Error ? error.message : String(error));
           resolve(null);
         }
       });
-    });
+    } catch (error) {
+      console.error('查詢標籤時出錯:', error instanceof Error ? error.message : String(error));
+      resolve(null);
+    }
   });
 };
 
@@ -115,17 +140,22 @@ const updateQuickButtonsState = (buttons: NodeListOf<HTMLButtonElement>, current
 
 // 更新廣告狀態顯示
 const updateAdStatusDisplay = async (): Promise<void> => {
-  const status = await getAdStatus();
-  
-  if (status === null) {
+  try {
+    const status = await getAdStatus();
+    
+    if (status === null) {
+      currentStatus.textContent = '請前往 YouTube 頁面使用';
+      return;
+    }
+    
+    if (status.isAd) {
+      currentStatus.textContent = `正在播放廣告 (${status.currentSpeed.toFixed(1)}x)`;
+    } else {
+      currentStatus.textContent = `正常影片播放中 (${status.currentSpeed.toFixed(1)}x)`;
+    }
+  } catch (error) {
+    console.error('更新廣告狀態顯示時出錯:', error instanceof Error ? error.message : String(error));
     currentStatus.textContent = '無法獲取狀態';
-    return;
-  }
-  
-  if (status.isAd) {
-    currentStatus.textContent = `正在播放廣告 (${status.currentSpeed.toFixed(1)}x)`;
-  } else {
-    currentStatus.textContent = `正常影片播放中 (${status.currentSpeed.toFixed(1)}x)`;
   }
 };
 
@@ -145,7 +175,7 @@ const init = async (): Promise<void> => {
     setupEventListeners();
     
   } catch (error) {
-    console.error('初始化彈出視窗時出錯:', error);
+    console.error('初始化彈出視窗時出錯:', error instanceof Error ? error.message : String(error));
   }
 };
 

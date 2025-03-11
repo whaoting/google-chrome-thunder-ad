@@ -120,18 +120,10 @@ const initVideoObserver = (): void => {
   videoElement.addEventListener('seeked', updateAdStatus);
 };
 
-// 初始化擴充功能
-const init = async (): Promise<void> => {
-  try {
-    // 獲取設定
-    currentSettings = await fetchSettings();
-    console.log('已獲取設定:', currentSettings);
-    
-    // 初始化視頻觀察器
-    initVideoObserver();
-    
-    // 監聽設定變更消息
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+// 設置消息監聽器
+const setupMessageListener = (): void => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    try {
       if (message.type === MessageType.UPDATE_SETTINGS && message.payload) {
         currentSettings = message.payload;
         console.log('設定已更新:', currentSettings);
@@ -145,14 +137,39 @@ const init = async (): Promise<void> => {
         
         sendResponse({ success: true });
       } else if (message.type === MessageType.GET_AD_STATUS) {
-        sendResponse({ success: true, status: adStatus });
+        // 確保即使在視頻元素尚未初始化的情況下也能回應
+        if (!videoElement) {
+          sendResponse({ 
+            success: true, 
+            status: { isAd: false, currentSpeed: currentSettings.videoSpeed } 
+          });
+        } else {
+          sendResponse({ success: true, status: adStatus });
+        }
       }
-      
-      return true;
-    });
+    } catch (error) {
+      console.error('處理消息時出錯:', error instanceof Error ? error.message : String(error));
+      sendResponse({ success: false, error: '處理消息時出錯' });
+    }
     
+    return true; // 表示將異步發送響應
+  });
+};
+
+// 初始化擴充功能
+const init = async (): Promise<void> => {
+  try {
+    // 設置消息監聽器（應該在最開始設置，以確保能夠響應消息）
+    setupMessageListener();
+    
+    // 獲取設定
+    currentSettings = await fetchSettings();
+    console.log('已獲取設定:', currentSettings);
+    
+    // 初始化視頻觀察器
+    initVideoObserver();
   } catch (error) {
-    console.error('初始化擴充功能時出錯:', error);
+    console.error('初始化擴充功能時出錯:', error instanceof Error ? error.message : String(error));
   }
 };
 
