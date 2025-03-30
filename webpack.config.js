@@ -5,7 +5,7 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 module.exports = {
   mode: "production",
   entry: {
-    popup: "./src/popup/index.ts",
+    popup: "./src/popup/index.tsx",
     content: "./src/content/index.ts",
     background: "./src/background/index.ts",
   },
@@ -17,7 +17,16 @@ module.exports = {
     rules: [
       {
         test: /\.tsx?$/,
-        use: "ts-loader",
+        use: [
+          {
+            loader: "ts-loader",
+            options: {
+              compilerOptions: {
+                jsx: "react",
+              },
+            },
+          },
+        ],
         exclude: /node_modules/,
       },
       {
@@ -28,6 +37,10 @@ module.exports = {
   },
   resolve: {
     extensions: [".tsx", ".ts", ".js"],
+    alias: {
+      react: path.resolve("./node_modules/react"),
+      "react-dom": path.resolve("./node_modules/react-dom"),
+    },
   },
   plugins: [
     new CopyPlugin({
@@ -42,4 +55,11 @@ module.exports = {
       chunks: ["popup"],
     }),
   ],
+  optimization: {
+    splitChunks: {
+      chunks(chunk) {
+        return chunk.name !== "background";
+      },
+    },
+  },
 };

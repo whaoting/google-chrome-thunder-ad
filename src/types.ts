@@ -19,8 +19,9 @@ export const DEFAULT_SETTINGS: UserSettings = {
 export enum MessageType {
   GET_SETTINGS = 'GET_SETTINGS',
   UPDATE_SETTINGS = 'UPDATE_SETTINGS',
+  GET_AD_STATUS = 'GET_AD_STATUS',
   AD_STATUS_CHANGED = 'AD_STATUS_CHANGED',
-  GET_AD_STATUS = 'GET_AD_STATUS'
+  PING = 'PING',
 }
 
 // 消息介面定義

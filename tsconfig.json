@@ -1,14 +1,17 @@
 {
   "compilerOptions": {
-    "target": "es6",
-    "module": "es6",
+    "target": "es2020",
+    "module": "es2020",
     "moduleResolution": "node",
     "strict": true,
     "esModuleInterop": true,
     "sourceMap": true,
     "outDir": "dist",
-    "lib": ["dom", "es6", "es2017"],
-    "jsx": "react"
+    "lib": ["dom", "es2020", "webworker"],
+    "jsx": "react",
+    "allowJs": true,
+    "skipLibCheck": true,
+    "types": ["chrome", "react", "react-dom"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules"]
