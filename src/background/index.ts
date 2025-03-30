@@ -36,6 +36,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           console.log('廣告狀態變更:', message.payload);
           sendResponse({ success: true });
           break;
+        case MessageType.UPDATE_BADGE:
+          // 確保 sender.tab 存在
+          if (!sender.tab?.id) {
+            console.warn('無法更新 badge：找不到分頁 ID');
+            return;
+          }
+
+          const speed = message.payload.speed;
+          const tabId = sender.tab.id;
+          
+          // 如果速度為 null，清除 badge
+          if (speed === null) {
+            chrome.action.setBadgeText({
+              text: '',
+              tabId
+            });
+            return;
+          }
+          
+          // 設定 badge 文字
+          chrome.action.setBadgeText({
+            text: speed.toFixed(1) + 'x',
+            tabId
+          });
+
+          // 設定 badge 背景顏色
+          chrome.action.setBadgeBackgroundColor({
+            color: '#ff6b6b',
+            tabId
+          });
+
+          // 設定 badge 文字顏色
+          chrome.action.setBadgeTextColor({
+            color: '#FFFFFF',
+            tabId
+          });
+          break;
         default:
           sendResponse({ success: false, error: '未知的消息類型' });
       }
@@ -76,4 +113,21 @@ chrome.runtime.onConnect.addListener((port) => {
   port.onDisconnect.addListener(() => {
     console.log('連接已斷開');
   });
+});
+
+// 當分頁關閉或更新時，清除該分頁的 badge
+chrome.tabs.onRemoved.addListener((tabId) => {
+  chrome.action.setBadgeText({
+    text: '',
+    tabId: tabId
+  });
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status === 'loading') {
+    chrome.action.setBadgeText({
+      text: '',
+      tabId: tabId
+    });
+  }
 }); 

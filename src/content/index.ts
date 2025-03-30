@@ -35,24 +35,19 @@ const checkIfAd = (): boolean => {
     const adIndicators = [
       // 廣告容器
       '.ytp-ad-player-overlay',        // 影片廣告覆蓋層
-      '.ytp-ad-overlay-container',     // 廣告覆蓋容器
-      '.video-ads.ytp-ad-module',      // 廣告模組
-      '.ytp-ad-text',                  // 廣告文字
-      '.ytp-ad-preview-container',     // 廣告預覽容器
       '.ytp-ad-skip-button-container', // 可跳過廣告按鈕容器
-      'div[id^="ad-text"]',           // 以 ad-text 開頭的廣告文字元素
-      '[class*="ytp-ad-"]'            // 任何包含 ytp-ad- 的類別
+      '.ytp-ad-preview-container',     // 廣告預覽容器
+      '.video-ads.ytp-ad-module'       // 廣告模組
     ];
 
     // 檢查是否存在任一廣告指標
-    const hasAdElement = adIndicators.some(selector => 
-      document.querySelector(selector) !== null
-    );
-
-    // 檢查 URL 是否包含廣告參數
-    const hasAdUrl = window.location.search.includes('&ad_type=') || 
-                    window.location.search.includes('&adformat=') ||
-                    window.location.search.includes('&adurl=');
+    const hasAdElement = adIndicators.some(selector => {
+      const element = document.querySelector(selector);
+      // 確保元素存在且可見
+      return element !== null && 
+             window.getComputedStyle(element).display !== 'none' &&
+             window.getComputedStyle(element).visibility !== 'hidden';
+    });
 
     // 檢查播放器狀態
     const playerElement = document.getElementById('movie_player');
@@ -63,12 +58,11 @@ const checkIfAd = (): boolean => {
     const isMusic = checkIfMusic();
 
     // 綜合判斷：如果是音樂影片，則不判定為廣告
-    const isAd = (hasAdElement || hasAdUrl || hasAdPlaying) && !isMusic;
+    const isAd = (hasAdElement || hasAdPlaying) && !isMusic;
     
     if (isAd) {
       console.log('偵測到廣告:', {
         hasAdElement,
-        hasAdUrl,
         hasAdPlaying,
         isMusic
       });
@@ -169,6 +163,11 @@ const updatePlaybackSpeed = async () => {
   try {
     const settings = await getSettings();
     if (!settings.enabled) {
+      // 如果插件被禁用，清除 badge
+      chrome.runtime.sendMessage({
+        type: MessageType.UPDATE_BADGE,
+        payload: { speed: null }
+      });
       return;
     }
 
@@ -181,28 +180,117 @@ const updatePlaybackSpeed = async () => {
       return;
     }
 
+    let newSpeed = 1.0;
+
     // 優先處理廣告
     if (isAd) {
-      video.playbackRate = settings.adSpeed;
-      console.log('設定廣告播放速度:', settings.adSpeed);
-      return;
+      newSpeed = settings.adSpeed;
+      video.playbackRate = newSpeed;
+      console.log('設定廣告播放速度:', newSpeed);
     }
-
     // 如果不是廣告，再檢查是否為音樂影片
-    if (isMusic && settings.autoNormalSpeedForMusic) {
-      video.playbackRate = 1.0;
+    else if (isMusic && settings.autoNormalSpeedForMusic) {
+      newSpeed = 1.0;
+      video.playbackRate = newSpeed;
       console.log('檢測到音樂影片，自動切換為 1 倍速');
-      return;
+    }
+    // 一般影片使用正常速度
+    else {
+      newSpeed = settings.videoSpeed;
+      video.playbackRate = newSpeed;
+      console.log('設定一般影片播放速度:', newSpeed);
     }
 
-    // 一般影片使用正常速度
-    video.playbackRate = settings.videoSpeed;
-    console.log('設定一般影片播放速度:', settings.videoSpeed);
+    // 發送速度更新訊息到 background script，使用設定的速度而不是實際的播放速度
+    chrome.runtime.sendMessage({
+      type: MessageType.UPDATE_BADGE,
+      payload: { speed: newSpeed }
+    });
 
     // 更新狀態
     await updateAdStatus();
   } catch (error) {
     console.error('更新播放速度時出錯:', error);
+  }
+};
+
+// 監聽播放速度變化
+const handlePlaybackRateChange = async (event: Event) => {
+  const videoElement = event.target as HTMLVideoElement;
+  const settings = await getSettings();
+  
+  if (!settings.enabled) {
+    chrome.runtime.sendMessage({
+      type: MessageType.UPDATE_BADGE,
+      payload: { speed: null }
+    });
+    return;
+  }
+
+  // 立即更新 badge 顯示當前速度
+  chrome.runtime.sendMessage({
+    type: MessageType.UPDATE_BADGE,
+    payload: { speed: videoElement.playbackRate }
+  });
+
+  const isAdVideo = await checkIfAd();
+  const isMusicVideo = await checkIfMusic();
+  
+  let newSpeed = videoElement.playbackRate;
+  
+  // 如果是廣告，使用廣告速度
+  if (isAdVideo) {
+    newSpeed = settings.adSpeed;
+    videoElement.playbackRate = newSpeed;
+  }
+  // 如果是音樂且啟用自動正常速度，使用 1.0
+  else if (isMusicVideo && settings.autoNormalSpeedForMusic) {
+    newSpeed = 1.0;
+    videoElement.playbackRate = newSpeed;
+  }
+  // 其他情況，使用用戶手動設定的速度
+  else {
+    settings.videoSpeed = videoElement.playbackRate;
+    // 儲存新的播放速度設定
+    chrome.runtime.sendMessage({
+      type: MessageType.UPDATE_SETTINGS,
+      payload: settings
+    });
+  }
+
+  // 如果速度被調整，再次更新 badge
+  if (newSpeed !== videoElement.playbackRate) {
+    chrome.runtime.sendMessage({
+      type: MessageType.UPDATE_BADGE,
+      payload: { speed: newSpeed }
+    });
+  }
+};
+
+// 初始化 MutationObserver
+const initObserver = () => {
+  if (observer) {
+    observer.disconnect();
+  }
+
+  observer = new MutationObserver(() => {
+    const videoElement = document.querySelector('video');
+    if (videoElement) {
+      // 移除舊的事件監聽器（如果存在）
+      videoElement.removeEventListener('ratechange', handlePlaybackRateChange);
+      // 添加新的事件監聽器
+      videoElement.addEventListener('ratechange', handlePlaybackRateChange);
+    }
+    updateAdStatus();
+  });
+
+  // 確保 document.body 存在後才開始觀察
+  if (document.body) {
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    console.log('開始觀察 DOM 變化');
   }
 };
 
@@ -283,38 +371,6 @@ const handleMessage = async (message: any, sendResponse: (response: any) => void
   }
 };
 
-// 監聽播放速度變化
-const handlePlaybackRateChange = (event: Event) => {
-  const videoElement = event.target as HTMLVideoElement;
-  if (!isAd) {
-    originalSpeed = videoElement.playbackRate;
-  }
-};
-
-// 初始化 MutationObserver
-const initObserver = () => {
-  if (observer) {
-    observer.disconnect();
-  }
-
-  observer = new MutationObserver(() => {
-    const videoElement = document.querySelector('video');
-    if (videoElement) {
-      videoElement.addEventListener('ratechange', handlePlaybackRateChange);
-    }
-    updateAdStatus();
-  });
-
-  // 確保 document.body 存在後才開始觀察
-  if (document.body) {
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-    console.log('開始觀察 DOM 變化');
-  }
-};
-
 // 初始化
 const init = async () => {
   try {
@@ -323,6 +379,9 @@ const init = async () => {
     
     // 設定 MutationObserver 監聽影片切換
     const observer = observeVideoChanges();
+    
+    // 初始化 DOM 觀察器
+    initObserver();
     
     // 監聽來自 popup 的訊息
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

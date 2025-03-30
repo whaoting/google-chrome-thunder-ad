@@ -25,6 +25,7 @@ export enum MessageType {
   GET_AD_STATUS = 'GET_AD_STATUS',
   AD_STATUS_CHANGED = 'AD_STATUS_CHANGED',
   PING = 'PING',
+  UPDATE_BADGE = 'UPDATE_BADGE'
 }
 
 // 消息介面定義
