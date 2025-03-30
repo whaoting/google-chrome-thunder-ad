@@ -1,12 +1,12 @@
 import './popup.css';
-import { MessageType, UserSettings, DEFAULT_SETTINGS, AdStatus } from '../types';
+import { MessageType, UserSettings, DEFAULT_SETTINGS, VideoStatus } from '../types';
 import { getSettings, saveSettings } from '../utils/storage';
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 const Popup: React.FC = () => {
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
-  const [adStatus, setAdStatus] = useState<AdStatus | null>(null);
+  const [adStatus, setAdStatus] = useState<VideoStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -41,7 +41,7 @@ const Popup: React.FC = () => {
   };
 
   // 獲取廣告狀態
-  const getAdStatus = async (): Promise<AdStatus> => {
+  const getAdStatus = async (): Promise<VideoStatus> => {
     try {
       // 檢查是否在 YouTube 頁面
       const tab = await checkYouTubePage();
@@ -64,7 +64,7 @@ const Popup: React.FC = () => {
         throw new Error('無法取得廣告狀態');
       }
 
-      return response as AdStatus;
+      return response as VideoStatus;
     } catch (error) {
       throw error;
     }
@@ -171,9 +171,11 @@ const Popup: React.FC = () => {
         {adStatus ? (
           <>
             <p className={adStatus.isAd ? 'ad-playing' : ''}>
-              <span>廣告狀態</span>
+              <span>影片狀態</span>
               <span className={`ad-status ${adStatus.isAd ? 'active' : ''}`}>
-                {adStatus.isAd ? '正在播放廣告' : '一般影片'}
+                {adStatus.isAd ? '正在播放廣告' : 
+                 adStatus.isMusic ? '音樂影片' : 
+                 '一般影片'}
               </span>
             </p>
             <p>
@@ -202,6 +204,21 @@ const Popup: React.FC = () => {
               disabled={!settings.enabled}
             />
             <span className="speed-value">{settings.adSpeed.toFixed(2)}x</span>
+          </div>
+        </div>
+
+        <div className="setting-item">
+          <label className="toggle-label">
+            <input
+              type="checkbox"
+              checked={settings.autoNormalSpeedForMusic}
+              onChange={(e) => updateSettings({ autoNormalSpeedForMusic: e.target.checked })}
+              disabled={!settings.enabled}
+            />
+            <span>音樂影片自動切換速度</span>
+          </label>
+          <div className="toggle-description">
+            當檢測到音樂影片時，自動切換為 1 倍速播放
           </div>
         </div>
 

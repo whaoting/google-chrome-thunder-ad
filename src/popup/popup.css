@@ -389,6 +389,21 @@ button:disabled {
   opacity: 0.9;
 }
 
+.setting-item .toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.setting-item .toggle-description {
+  font-size: 12px;
+  color: var(--text-color);
+  opacity: 0.7;
+  margin-top: 4px;
+  margin-left: 48px;
+}
+
 /* 速度顯示樣式 */
 .setting-item span {
   display: inline-block;
