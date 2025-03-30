@@ -26,19 +26,50 @@ const initSettings = async (): Promise<void> => {
 // 檢查當前影片是否為廣告
 const checkIfAd = (): boolean => {
   try {
-    // 檢查 URL 是否包含廣告參數
-    const isAdUrl = window.location.pathname.includes('/watch') && 
-                    window.location.search.includes('adurl=');
-    
     // 檢查播放器元素
     const videoElement = document.querySelector('video');
     if (!videoElement) return false;
 
-    // 檢查廣告相關元素
-    const adOverlay = document.querySelector('.ytp-ad-overlay-slot');
-    const adPlayerOverlay = document.querySelector('.ytp-ad-player-overlay');
+    // 檢查多個廣告指標
+    const adIndicators = [
+      // 廣告容器
+      '.ytp-ad-player-overlay',        // 影片廣告覆蓋層
+      '.ytp-ad-overlay-container',     // 廣告覆蓋容器
+      '.video-ads.ytp-ad-module',      // 廣告模組
+      '.ytp-ad-text',                  // 廣告文字
+      '.ytp-ad-preview-container',     // 廣告預覽容器
+      '.ytp-ad-skip-button-container', // 可跳過廣告按鈕容器
+      'div[id^="ad-text"]',           // 以 ad-text 開頭的廣告文字元素
+      '[class*="ytp-ad-"]'            // 任何包含 ytp-ad- 的類別
+    ];
+
+    // 檢查是否存在任一廣告指標
+    const hasAdElement = adIndicators.some(selector => 
+      document.querySelector(selector) !== null
+    );
+
+    // 檢查 URL 是否包含廣告參數
+    const hasAdUrl = window.location.search.includes('&ad_type=') || 
+                    window.location.search.includes('&adformat=') ||
+                    window.location.search.includes('&adurl=');
+
+    // 檢查播放器狀態
+    const playerElement = document.getElementById('movie_player');
+    const hasAdPlaying = playerElement?.classList.contains('ad-showing') === true || 
+                        playerElement?.classList.contains('ad-interrupting') === true;
+
+    // 綜合判斷
+    const isAd = hasAdElement || hasAdUrl || hasAdPlaying;
     
-    return isAdUrl || !!adOverlay || !!adPlayerOverlay;
+    if (isAd) {
+      console.log('偵測到廣告:', {
+        hasAdElement,
+        hasAdUrl,
+        hasAdPlaying
+      });
+    }
+
+    return isAd;
   } catch (error) {
     console.error('檢查廣告狀態時出錯:', error instanceof Error ? error.message : String(error));
     return false;
