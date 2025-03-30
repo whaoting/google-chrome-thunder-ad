@@ -251,12 +251,20 @@ footer {
   gap: 16px;
 }
 
+.popup-container {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 標題區塊 */
 h1 {
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 0;
-  padding: 16px;
+  padding-bottom: 12px;
   font-size: 1.5rem;
   font-weight: 600;
   color: var(--primary-color);
@@ -269,11 +277,76 @@ h1 img {
   height: 24px;
 }
 
+/* 區塊共用樣式 */
+.status-section,
+.settings-section {
+  background-color: var(--secondary-color);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 0;
+}
+
+/* 區塊標題 */
 h2 {
-  margin: 16px 0 8px 0;
+  margin: 0;
+  margin-bottom: 8px;
   font-size: 16px;
   color: var(--primary-color);
   opacity: 0.9;
+}
+
+/* 狀態顯示樣式 */
+.status-section p {
+  margin: 8px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-section p:first-of-type {
+  margin-top: 0;
+}
+
+.status-section p:last-child {
+  margin-bottom: 0;
+}
+
+/* 開關按鈕容器 */
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+/* 開關說明文字 */
+.toggle-description {
+  font-size: 12px;
+  color: var(--text-color);
+  opacity: 0.7;
+  margin-top: 4px;
+  margin-left: 48px;
+  margin-bottom: 0;
+}
+
+/* 速度控制區塊 */
+.speed-control {
+  margin-top: 6px;
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 重置按鈕 */
+button {
+  margin-top: 8px;
+  width: 100%;
+}
+
+/* 錯誤訊息 */
+.error-message {
+  margin: -8px 0;
 }
 
 .status {
@@ -379,7 +452,11 @@ button:disabled {
 
 /* 設定項目樣式 */
 .setting-item {
-  margin: 12px 0;
+  margin-bottom: 8px;
+}
+
+.setting-item:last-child {
+  margin-bottom: 0;
 }
 
 .setting-item label {
@@ -447,32 +524,6 @@ input[type="checkbox"]::before {
 
 input[type="checkbox"]:checked::before {
   left: 22px;
-}
-
-/* 錯誤訊息樣式 */
-.error-message {
-  background-color: var(--error-color);
-  color: var(--text-color);
-  padding: 8px 12px;
-  border-radius: 4px;
-  margin-bottom: 16px;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.error-message::before {
-  content: "⚠️";
-}
-
-/* 載入中狀態樣式 */
-.loading {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100px;
-  color: var(--primary-color);
 }
 
 /* 廣告狀態指示器 */

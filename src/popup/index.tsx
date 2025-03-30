@@ -158,16 +158,6 @@ const Popup: React.FC = () => {
       
       <div className="status-section">
         <h2>當前狀態</h2>
-        <div className="setting-item">
-          <label className="toggle-label">
-            <input
-              type="checkbox"
-              checked={settings.enabled}
-              onChange={(e) => updateSettings({ enabled: e.target.checked })}
-            />
-            <span>啟用插件</span>
-          </label>
-        </div>
         {adStatus ? (
           <>
             <p className={adStatus.isAd ? 'ad-playing' : ''}>
@@ -189,22 +179,16 @@ const Popup: React.FC = () => {
       </div>
 
       <div className="settings-section">
-        <h2>播放速度設定</h2>
-        
+        <h2>功能設定</h2>
         <div className="setting-item">
-          <label>廣告播放速度</label>
-          <div className="speed-control">
+          <label className="toggle-label">
             <input
-              type="range"
-              min="1"
-              max="16"
-              step="0.1"
-              value={settings.adSpeed}
-              onChange={(e) => updateSettings({ adSpeed: parseFloat(e.target.value) })}
-              disabled={!settings.enabled}
+              type="checkbox"
+              checked={settings.enabled}
+              onChange={(e) => updateSettings({ enabled: e.target.checked })}
             />
-            <span className="speed-value">{settings.adSpeed.toFixed(2)}x</span>
-          </div>
+            <span>啟用插件</span>
+          </label>
         </div>
 
         <div className="setting-item">
@@ -219,6 +203,25 @@ const Popup: React.FC = () => {
           </label>
           <div className="toggle-description">
             當檢測到音樂影片時，自動切換為 1 倍速播放
+          </div>
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <h2>播放速度設定</h2>
+        <div className="setting-item">
+          <label>廣告播放速度</label>
+          <div className="speed-control">
+            <input
+              type="range"
+              min="1"
+              max="16"
+              step="0.1"
+              value={settings.adSpeed}
+              onChange={(e) => updateSettings({ adSpeed: parseFloat(e.target.value) })}
+              disabled={!settings.enabled}
+            />
+            <span className="speed-value">{settings.adSpeed.toFixed(2)}x</span>
           </div>
         </div>
 
