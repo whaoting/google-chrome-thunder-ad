@@ -92,11 +92,12 @@ const checkIfAd = (): boolean => {
 // 檢查當前影片是否為音樂類型
 const checkIfMusic = (): boolean => {
   try {
-    // 方法 1: 檢查頻道名稱是否為官方音樂頻道
-    const channelName = document.querySelector('#top-row ytd-video-owner-renderer yt-formatted-string.ytd-channel-name')?.textContent?.trim();
+    // 方法 1: 檢查頻道名稱
+    const channelName = document.querySelector('#channel-name #text')?.textContent?.trim();
     const isMusicChannel = channelName?.includes('- Topic') || 
                          channelName?.endsWith('VEVO') ||
-                         channelName?.includes('Official Music');
+                         channelName?.includes('Official Music') ||
+                         channelName?.includes('Music');
 
     // 方法 2: 檢查影片類別
     const categoryElement = document.querySelector('meta[itemprop="genre"]');
@@ -104,24 +105,43 @@ const checkIfMusic = (): boolean => {
     const isMusicCategory = category === 'Music';
 
     // 方法 3: 檢查影片標題和描述
-    const videoTitle = document.querySelector('h1.ytd-video-primary-info-renderer')?.textContent?.trim();
+    const videoTitle = document.querySelector('#title h1')?.textContent?.trim();
     const videoDescription = document.querySelector('#description')?.textContent?.trim();
     const hasMusicKeywords = (videoTitle?.toLowerCase().includes('mv') ||
                            videoTitle?.toLowerCase().includes('music video') ||
-                           videoTitle?.toLowerCase().includes('official video')) ?? false;
+                           videoTitle?.toLowerCase().includes('official video') ||
+                           videoTitle?.toLowerCase().includes('lyric video') ||
+                           videoTitle?.toLowerCase().includes('music') ||
+                           videoTitle?.toLowerCase().includes('song')) ?? false;
 
     // 方法 4: 檢查音樂區段標記
     const hasChapters = document.querySelectorAll('.ytp-chapter-marker-segment').length > 0;
 
-    // 綜合判斷
-    const isMusic = isMusicChannel || isMusicCategory || hasMusicKeywords || hasChapters;
+    // 方法 5: 檢查是否有音樂相關的標籤
+    const tags = Array.from(document.querySelectorAll('meta[property="og:video:tag"]'))
+      .map(tag => tag.getAttribute('content')?.toLowerCase());
+    const hasMusicTags = tags.some(tag => 
+      tag?.includes('music') || 
+      tag?.includes('song') || 
+      tag?.includes('mv') || 
+      tag?.includes('lyric')
+    );
 
+    // 綜合判斷：只要滿足任一條件即可
+    const isMusic = isMusicChannel || 
+                   isMusicCategory || 
+                   hasMusicKeywords || 
+                   hasChapters || 
+                   hasMusicTags;
+
+    // 只在偵測到音樂影片時輸出日誌
     if (isMusic) {
       console.log('偵測到音樂影片:', {
         channelName,
         category,
-        hasMusicKeywords,
-        hasChapters
+        videoTitle,
+        hasChapters,
+        tags
       });
     }
 
@@ -140,7 +160,7 @@ const observeVideoChanges = () => {
         // 檢查影片元素是否變更
         const videoElement = document.querySelector('video');
         if (videoElement) {
-          // 更新播放速度
+          // 立即更新播放速度
           updatePlaybackSpeed();
         }
       }
@@ -164,7 +184,7 @@ const observeVideoChanges = () => {
     const currentUrl = window.location.href;
     if (currentUrl !== lastUrl) {
       lastUrl = currentUrl;
-      // URL 變更時更新播放速度
+      // URL 變更時立即更新播放速度
       updatePlaybackSpeed();
     }
   }, 1000);
@@ -178,16 +198,40 @@ const observeVideoChanges = () => {
     const isAd = await checkIfAd();
     const isMusic = await checkIfMusic();
 
-    // 如果不是廣告且不是音樂影片，確保使用設定的影片速度
-    if (!isAd && !(isMusic && settings.autoNormalSpeedForMusic)) {
-      if (video.playbackRate !== settings.videoSpeed) {
-        video.playbackRate = settings.videoSpeed;
-        console.log('恢復影片播放速度:', settings.videoSpeed);
+    // 如果是廣告，強制使用廣告速度
+    if (isAd) {
+      if (video.playbackRate !== settings.adSpeed) {
+        video.playbackRate = settings.adSpeed;
+        console.log('強制調整廣告播放速度:', settings.adSpeed);
       }
     }
+    // 如果是音樂影片且啟用自動調整，強制使用 1.0
+    else if (isMusic && settings.autoNormalSpeedForMusic) {
+      if (video.playbackRate !== 1.0) {
+        video.playbackRate = 1.0;
+        console.log('強制調整音樂影片為 1 倍速');
+      }
+    }
+    // 一般影片：只在速度被插件改變時才更新設定
+    else if (video.playbackRate !== settings.videoSpeed && 
+             video.playbackRate !== settings.adSpeed && 
+             !(isMusic && settings.autoNormalSpeedForMusic)) {
+      // 更新設定中的影片速度
+      settings.videoSpeed = video.playbackRate;
+      // 儲存新的播放速度設定
+      chrome.runtime.sendMessage({
+        type: MessageType.UPDATE_SETTINGS,
+        payload: settings
+      });
+      console.log('更新影片播放速度設定:', video.playbackRate);
+    }
 
-    updatePlaybackSpeed();
-  }, 500); // 每 500ms 檢查一次
+    // 更新 badge 顯示
+    chrome.runtime.sendMessage({
+      type: MessageType.UPDATE_BADGE,
+      payload: { speed: video.playbackRate }
+    });
+  }, 1000); // 改為每 1 秒檢查一次
 
   return observer;
 };
