@@ -205,6 +205,17 @@ const Popup: React.FC = () => {
             當檢測到音樂影片時，自動切換為 1 倍速播放
           </div>
         </div>
+
+        <div className="setting-item">
+          <label className="toggle-label">
+            <input
+              type="checkbox"
+              checked={settings.autoSkipAds}
+              onChange={(e) => updateSettings({ autoSkipAds: e.target.checked })}
+            />
+            <span>自動略過廣告</span>
+          </label>
+        </div>
       </div>
 
       <div className="settings-section">

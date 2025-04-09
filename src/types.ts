@@ -8,6 +8,7 @@ export interface UserSettings {
   enabled: boolean;
   // 是否自動將音樂影片速度調整為正常速度
   autoNormalSpeedForMusic: boolean;
+  autoSkipAds: boolean;
 }
 
 // 預設設定
@@ -15,7 +16,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   adSpeed: 16.0,
   videoSpeed: 1.0,
   enabled: true,
-  autoNormalSpeedForMusic: true
+  autoNormalSpeedForMusic: true,
+  autoSkipAds: false
 };
 
 // 消息類型定義

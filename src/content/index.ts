@@ -6,7 +6,11 @@ let userSettings: UserSettings = DEFAULT_SETTINGS;
 let currentIsAd = false;
 let isAd: boolean = false;
 let originalSpeed: number = 1.0;
-let observer: MutationObserver | null = null;
+let videoObserver: MutationObserver | null = null;
+let skipObserver: MutationObserver | null = null;
+let adCheckInterval: number | null = null;
+let messageListener: ((message: any, sender: chrome.runtime.MessageSender, sendResponse: (response: any) => void) => void) | null = null;
+let isExtensionValid = true;
 
 // 確保 content script 已經載入
 console.log('Content script 已載入');
@@ -21,6 +25,16 @@ const initSettings = async (): Promise<void> => {
     }
   } catch (error) {
     console.error('載入設定時出錯:', error instanceof Error ? error.message : String(error));
+  }
+};
+
+// 檢查擴充功能是否有效
+const checkExtensionValidity = () => {
+  try {
+    chrome.runtime.getURL('');
+    return true;
+  } catch (error) {
+    return false;
   }
 };
 
@@ -155,6 +169,26 @@ const observeVideoChanges = () => {
     }
   }, 1000);
 
+  // 定期檢查廣告狀態和播放速度
+  setInterval(async () => {
+    const video = document.querySelector('video');
+    if (!video) return;
+
+    const settings = await getSettings();
+    const isAd = await checkIfAd();
+    const isMusic = await checkIfMusic();
+
+    // 如果不是廣告且不是音樂影片，確保使用設定的影片速度
+    if (!isAd && !(isMusic && settings.autoNormalSpeedForMusic)) {
+      if (video.playbackRate !== settings.videoSpeed) {
+        video.playbackRate = settings.videoSpeed;
+        console.log('恢復影片播放速度:', settings.videoSpeed);
+      }
+    }
+
+    updatePlaybackSpeed();
+  }, 500); // 每 500ms 檢查一次
+
   return observer;
 };
 
@@ -180,7 +214,7 @@ const updatePlaybackSpeed = async () => {
       return;
     }
 
-    let newSpeed = 1.0;
+    let newSpeed = video.playbackRate; // 預設使用當前播放速度
 
     // 優先處理廣告
     if (isAd) {
@@ -194,17 +228,23 @@ const updatePlaybackSpeed = async () => {
       video.playbackRate = newSpeed;
       console.log('檢測到音樂影片，自動切換為 1 倍速');
     }
-    // 一般影片使用正常速度
-    else {
-      newSpeed = settings.videoSpeed;
-      video.playbackRate = newSpeed;
-      console.log('設定一般影片播放速度:', newSpeed);
+    // 一般影片：如果當前速度不是廣告速度或音樂速度，則更新設定
+    else if (video.playbackRate !== settings.adSpeed && 
+             !(isMusic && settings.autoNormalSpeedForMusic)) {
+      // 更新設定中的影片速度
+      settings.videoSpeed = video.playbackRate;
+      // 儲存新的播放速度設定
+      chrome.runtime.sendMessage({
+        type: MessageType.UPDATE_SETTINGS,
+        payload: settings
+      });
+      console.log('更新影片播放速度設定:', video.playbackRate);
     }
 
-    // 發送速度更新訊息到 background script，使用設定的速度而不是實際的播放速度
+    // 發送速度更新訊息到 background script
     chrome.runtime.sendMessage({
       type: MessageType.UPDATE_BADGE,
-      payload: { speed: newSpeed }
+      payload: { speed: video.playbackRate }
     });
 
     // 更新狀態
@@ -269,11 +309,11 @@ const handlePlaybackRateChange = async (event: Event) => {
 
 // 初始化 MutationObserver
 const initObserver = () => {
-  if (observer) {
-    observer.disconnect();
+  if (videoObserver) {
+    videoObserver.disconnect();
   }
 
-  observer = new MutationObserver(() => {
+  videoObserver = new MutationObserver(() => {
     const videoElement = document.querySelector('video');
     if (videoElement) {
       // 移除舊的事件監聽器（如果存在）
@@ -286,7 +326,7 @@ const initObserver = () => {
 
   // 確保 document.body 存在後才開始觀察
   if (document.body) {
-    observer.observe(document.body, {
+    videoObserver.observe(document.body, {
       childList: true,
       subtree: true
     });
@@ -371,38 +411,150 @@ const handleMessage = async (message: any, sendResponse: (response: any) => void
   }
 };
 
+// 自動略過廣告
+const autoSkipAds = async (): Promise<MutationObserver | null> => {
+  try {
+    const settings = await getSettings();
+    if (!settings.enabled || !settings.autoSkipAds) return null;
+
+    // 監聽略過按鈕的出現
+    const skipButtonObserver = new MutationObserver(async (mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'childList' || mutation.type === 'attributes') {
+          // 檢查是否出現略過按鈕
+          const skipButton = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern');
+          if (skipButton && !skipButton.hasAttribute('data-clicked')) {
+            // 標記按鈕已被點擊
+            skipButton.setAttribute('data-clicked', 'true');
+            
+            // 隨機延遲 0.5~1.5 秒
+            const delay = Math.random() * 1000 + 500;
+            
+            setTimeout(() => {
+              if (skipButton instanceof HTMLElement) {
+                skipButton.click();
+                console.log('自動略過廣告');
+              }
+            }, delay);
+          }
+        }
+      }
+    });
+
+    // 監聽播放器元素
+    const playerElement = document.getElementById('movie_player');
+    if (playerElement) {
+      skipButtonObserver.observe(playerElement, {
+        childList: true,
+        subtree: true,
+        attributes: true
+      });
+    }
+
+    return skipButtonObserver;
+  } catch (error) {
+    console.error('自動略過廣告時出錯:', error);
+    return null;
+  }
+};
+
+// 清理所有資源
+const cleanup = () => {
+  try {
+    if (videoObserver) {
+      videoObserver.disconnect();
+      videoObserver = null;
+    }
+    if (skipObserver) {
+      skipObserver.disconnect();
+      skipObserver = null;
+    }
+    if (adCheckInterval) {
+      clearInterval(adCheckInterval);
+      adCheckInterval = null;
+    }
+    if (messageListener) {
+      chrome.runtime.onMessage.removeListener(messageListener);
+      messageListener = null;
+    }
+    isExtensionValid = false;
+  } catch (error) {
+    console.error('清理資源時出錯:', error);
+  }
+};
+
 // 初始化
 const init = async () => {
   try {
+    // 檢查擴充功能是否有效
+    if (!checkExtensionValidity()) {
+      console.warn('擴充功能已失效');
+      cleanup();
+      return;
+    }
+
+    // 先清理可能存在的舊資源
+    cleanup();
+
     // 載入設定
     userSettings = await getSettings();
     
     // 設定 MutationObserver 監聽影片切換
-    const observer = observeVideoChanges();
+    videoObserver = observeVideoChanges();
     
-    // 初始化 DOM 觀察器
-    initObserver();
+    // 初始化自動略過廣告功能
+    skipObserver = await autoSkipAds();
     
     // 監聽來自 popup 的訊息
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    messageListener = (message, sender, sendResponse) => {
+      if (!isExtensionValid) return;
       handleMessage(message, sendResponse);
       return true;
-    });
+    };
+    chrome.runtime.onMessage.addListener(messageListener);
 
-    // 定期檢查廣告狀態
-    setInterval(async () => {
-      const isAd = await checkIfAd();
-      if (isAd !== currentIsAd) {
-        currentIsAd = isAd;
-        await updateAdStatus();
+    // 定期檢查廣告狀態和擴充功能有效性
+    adCheckInterval = window.setInterval(async () => {
+      try {
+        if (!checkExtensionValidity()) {
+          console.warn('擴充功能已失效');
+          cleanup();
+          return;
+        }
+
+        const isAd = await checkIfAd();
+        if (isAd !== currentIsAd) {
+          currentIsAd = isAd;
+          await updateAdStatus();
+        }
+      } catch (error) {
+        console.error('檢查廣告狀態時出錯:', error);
+        if (error instanceof Error && error.message.includes('Extension context invalidated')) {
+          cleanup();
+        }
       }
     }, 1000);
 
     console.log('Content script 已初始化');
+    isExtensionValid = true;
+
   } catch (error) {
     console.error('初始化時出錯:', error instanceof Error ? error.message : String(error));
+    if (error instanceof Error && error.message.includes('Extension context invalidated')) {
+      cleanup();
+    }
   }
 };
 
 // 啟動初始化
-init(); 
+init();
+
+// 監聽頁面卸載事件
+window.addEventListener('unload', cleanup);
+
+// 監聽擴充功能失效事件
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'EXTENSION_INVALIDATED') {
+    cleanup();
+  }
+}); 
